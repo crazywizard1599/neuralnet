@@ -20,7 +20,7 @@ To implement a basic neural network, the following components are required:
 5. **Loss Function** - check
    - Implementation of loss functions (e.g., mean squared error, cross-entropy)
 
-6. **Backward Propagation**
+6. **Backward Propagation** - check
    - Calculation of gradients for weights and biases
 
 7. **Optimizer**

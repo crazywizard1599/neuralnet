@@ -1,0 +1,52 @@
+use neuralnet::back_propagation::backward_pass_1d;
+use neuralnet::layers::Layer1D;
+use neuralnet::loss_fn::Loss;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_backward_pass_changes_weights_f32() {
+        // Setup: single layer with 2 outputs (neurons), weights all ones, zero biases
+        let mut layer = Layer1D {
+            weights: [[1.0f32, 1.0], [1.0, 1.0]],
+            biases: [0.0f32, 0.0],
+        };
+        let original = layer.weights;
+
+        let mut layers = vec![layer];
+
+        // Predictions vs targets (MSE) -> gradients non-zero
+        let predictions = [0.5f32, 0.5];
+        let targets = [1.0f32, 1.0];
+        let lr = 0.1f32;
+
+        backward_pass_1d::<f32, 2>(&mut layers, Loss::MeanSquaredError, &predictions, &targets, lr);
+
+        // At least one weight should have been updated (not equal to original)
+        assert_ne!(layers[0].weights, original, "weights should change after backward pass");
+    }
+
+    #[test]
+    fn test_backward_pass_changes_weights_i32() {
+        // Setup: single layer with 2 outputs (neurons), integer weights
+        let mut layer = Layer1D {
+            weights: [[1i32, 1], [1, 1]],
+            biases: [0i32, 0],
+        };
+        let original = layer.weights;
+
+        let mut layers = vec![layer];
+
+        // Predictions vs targets (MSE) -> integer gradients; learning rate 1
+        let predictions = [0i32, 0];
+        let targets = [1i32, 1];
+        let lr = 1i32;
+
+        backward_pass_1d::<i32, 2>(&mut layers, Loss::MeanSquaredError, &predictions, &targets, lr);
+
+        // We expect integer weights to be updated (implementation-defined); ensure change occurred
+        assert_ne!(layers[0].weights, original, "integer weights should change after backward pass");
+    }
+}

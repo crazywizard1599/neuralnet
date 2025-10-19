@@ -156,35 +156,63 @@ impl Loss {
         }
     }
 
-    /// Compute the derivative of the loss with respect to a *single* prediction.
+    /// Compute the derivative of the loss with respect to each prediction (per-sample).
     ///
-    /// # Return value
-    /// The returned `T` is the scalar partial derivative `dL / d(prediction)` for
-    /// the element passed in. Note that for batched losses you will typically call
-    /// this per-element and then average or sum the derivatives as appropriate.
+    /// # Behavior and steps
+    /// - The function expects `predictions.len() == targets.len()`; it will panic otherwise.
+    /// - Returns a `Vec<T>` with one derivative value per input sample (same order).
+    /// - Implemented derivatives:
+    ///   - MeanSquaredError: d/dp ( (p - t)^2 ) = 2 * (p - t)
+    ///     (this returns the per-sample derivative without averaging by `1/n`).
+    ///   - CrossEntropy: d/dp ( -t ln p ) = - t / p
+    ///     - For numerical stability we clamp `p` to `[eps, 1]` before division to avoid division by zero.
+    ///   - BinaryCrossEntropy (per-sample): d/dp ( -t ln p - (1-t) ln(1-p) ) =
+    ///     - t / p + (1 - t) / (1 - p), with signs handled as:
+    ///     = - ( t / p ) + (1 - t) / (1 - p)
+    ///     - For numerical stability we clamp `p` into `[eps, 1 - eps]` and also clamp `1 - p`.
     ///
-    /// # Implemented derivatives
-    /// - `MeanSquaredError`: returns `2 * (prediction - target)` (no `1/n` factor).
-    /// - `CrossEntropy`: returns `- target / prediction` (derivative of `-t ln p`
-    ///   with respect to `p`). **This implementation does not clamp `prediction`**
-    ///   — take care to avoid division by zero when using this function.
-    /// - `BinaryCrossEntropy`: returns `- (target / p) + ((1 - target) / (1 - p))`
-    ///   where `p` is clamped to `[eps, 1 - eps]` for numerical stability.
-    ///
-    /// # Notes on averaging
-    /// If you computed `forward` as an average over `n` items, but want to obtain
-    /// the gradient of that averaged loss, you must divide the per-sample
-    /// derivatives by `n` yourself (i.e. the `derivative` method intentionally
-    /// returns the derivative for a single element, not the batch mean's derivative).
-    pub fn derivative<T: Number + FromPrimitive>(&self, prediction: T, target: T) -> T {
+    /// # Notes
+    /// - Clamping uses `eps = 1e-15` converted to `T` via `T::to_number`.
+    /// - If you compute a batched/averaged forward loss, divide these per-sample derivatives
+    ///   by the batch size yourself to obtain gradients of the averaged loss.
+    pub fn derivative<T: Number + FromPrimitive>(&self, predictions: &[T], targets: &[T]) -> Vec<T> {
+        assert_eq!(predictions.len(), targets.len(), "predictions and targets must have the same length");
+        let eps = T::to_number(1e-15);
+
         match self {
-            Loss::MeanSquaredError => T::from_f64(2.0).unwrap() * (prediction - target),
-            Loss::CrossEntropy => - target / prediction,
+            Loss::MeanSquaredError => {
+                let two = T::from_f64(2.0).unwrap();
+                predictions.iter().zip(targets.iter())
+                    .map(|(p, t)| two * (*p - *t))
+                    .collect()
+            }
+            Loss::CrossEntropy => {
+                predictions.iter().zip(targets.iter())
+                    .map(|(p, t)| {
+                        let p_clamped = if *p < eps { eps } else { *p };
+                        - *t / p_clamped
+                    })
+                    .collect()
+            }
             Loss::BinaryCrossEntropy => {
-                let eps = T::to_number(1e-15);
-                let p = if prediction < eps { eps } else if prediction > T::one() - eps { T::one() - eps } else { prediction };
-                let one_minus_p = if T::one() - p < eps { eps } else { T::one() - p };
-                - (target / p) + ((T::one() - target) / one_minus_p)
+                predictions.iter().zip(targets.iter())
+                    .map(|(p, t)| {
+                        // clamp p into [eps, 1 - eps]
+                        let p_clamped = if *p < eps {
+                            eps
+                        } else if *p > T::one() - eps {
+                            T::one() - eps
+                        } else {
+                            *p
+                        };
+                        let one_minus_p = if T::one() - p_clamped < eps {
+                            eps
+                        } else {
+                            T::one() - p_clamped
+                        };
+                        - (*t / p_clamped) + ((T::one() - *t) / one_minus_p)
+                    })
+                    .collect()
             }
         }
     }

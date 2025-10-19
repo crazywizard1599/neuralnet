@@ -10,6 +10,12 @@ impl<T: Number, const N: usize> Layer1D<T, N> {
     pub fn forward(&self, inputs: &[T; N]) -> [T; N] { 
         dense_linear(inputs, self)
     }
+
+    pub fn update_weights(&mut self, gradients: &[T], learning_rate: T) -> () {
+        for i in 0..N {
+            self.weights[i] = self.weights[i] - gradients[i] * learning_rate;
+        }
+    }
 }
 
 pub struct Layer2D<T: Number, const FILTERS: usize, const FILTER_SIZE: usize> {
