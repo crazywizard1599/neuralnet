@@ -88,4 +88,3 @@ pub fn read_excel<P: AsRef<Path>>(path: P) -> Result<Vec<Vec<String>>, Box<dyn E
     }
     Ok(records)
 }
-

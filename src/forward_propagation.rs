@@ -1,5 +1,5 @@
 use crate::numbers::Number;
-use crate::layers::*;
+use crate::layers::{Layer1D, Layer2D};
 
 /// Performs forward propagation for a dense (fully connected) linear layer.
 ///
@@ -22,7 +22,7 @@ use crate::layers::*;
 ///
 pub fn dense_linear<T: Number, const IN: usize, const OUT: usize>(
     inputs: &[T; IN],
-    layer: &Layer1D<T, OUT>,
+    layer: &Layer1D<T, OUT, IN>,
 ) -> [T; OUT]
 where
     T: Number,
@@ -34,7 +34,7 @@ where
         outputs[i] = biases[i];
         for j in 0..IN {
             // Step 2: Add weighted input: inputs[j] * weights[i][j]
-            outputs[i] = outputs[i] + inputs[j] * weights[i];
+            outputs[i] = outputs[i] + inputs[j] * weights[i][j];
         }
     }
     // Step 3: Return outputs

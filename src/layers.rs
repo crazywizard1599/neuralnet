@@ -1,19 +1,31 @@
 use crate::numbers::*;
 use crate::forward_propagation::*;
 
-pub struct Layer1D<T: Number, const N: usize> {
-    pub weights: [T; N],
-    pub biases: [T; N],
+/// Fully-connected layer with OUT outputs and IN inputs.
+/// weights[i][j] is weight for output i and input j.
+pub struct Layer1D<T: Number, const OUT: usize, const IN: usize> {
+    pub weights: [[T; IN]; OUT],
+    pub biases: [T; OUT],
 }
 
-impl<T: Number, const N: usize> Layer1D<T, N> {
-    pub fn forward(&self, inputs: &[T; N]) -> [T; N] { 
-        dense_linear(inputs, self)
+impl<T: Number, const OUT: usize, const IN: usize> Layer1D<T, OUT, IN> {
+    pub fn new(weights: [[T; IN]; OUT], biases: [T; OUT]) -> Self {
+        Layer1D { weights, biases }
     }
 
-    pub fn update_weights(&mut self, gradients: &[T], learning_rate: T) -> () {
-        for i in 0..N {
-            self.weights[i] = self.weights[i] - gradients[i] * learning_rate;
+    /// Forward pass: compute outputs = biases + W * inputs
+    pub fn forward(&self, inputs: &[T; IN]) -> [T; OUT] {
+        crate::forward_propagation::dense_linear(inputs, self)
+    }
+
+    /// Update weights and biases in-place given gradients and learning rate.
+    /// weight_grads has same shape as weights: [OUT][IN], bias_grads length OUT.
+    pub fn update_weights(&mut self, weight_grads: &[[T; IN]; OUT], bias_grads: &[T; OUT], learning_rate: T) {
+        for i in 0..OUT {
+            self.biases[i] = self.biases[i] - bias_grads[i] * learning_rate;
+            for j in 0..IN {
+                self.weights[i][j] = self.weights[i][j] - weight_grads[i][j] * learning_rate;
+            }
         }
     }
 }
@@ -49,13 +61,25 @@ impl<T: Number, const FILTERS: usize, const FILTER_SIZE: usize> Layer2D<T, FILTE
 /// - If `values.len() > N`, excess values are ignored.
 /// - Bias array is always initialized to zeros.
 ///
-pub fn linear<T: Number, const N: usize>(values: &[T]) -> Layer1D<T, N> {
-    let mut arr = [T::zero(); N];
-    for (i, &value) in values.iter().enumerate().take(N) {
-        arr[i] = value;
+pub fn linear<T: Number, const N: usize, const IN: usize>(values: &[T]) -> Layer1D<T, N, IN> {
+    // Create a weight matrix with shape [N][IN] and fill it from the flattened `values` slice.
+    // If `values` is shorter than N*IN the remaining entries stay as T::zero().
+    // If `values` is longer, excess values are ignored.
+    let mut weights = [[T::zero(); IN]; N];
+    let mut idx = 0usize;
+    for i in 0..N {
+        for j in 0..IN {
+            if idx < values.len() {
+                weights[i][j] = values[idx];
+                idx += 1;
+            } else {
+                // leave default zero
+            }
+        }
     }
+
     Layer1D {
-        weights: arr,
+        weights,
         biases: [T::zero(); N],
     }
 }
